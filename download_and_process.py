@@ -6,6 +6,9 @@ import os
 import json
 import cv2
 import pandas as pd
+from threading import Thread
+import time
+
 
 
 def download(video_path, ytb_id, proxy=None):
@@ -108,70 +111,123 @@ def load_data(file_path):
         yield ytb_id, save_name, time, bbox
 
 
+def processarVideos():
+    
+    
+    raw = "/raw"
+    processed = "/processed"
+                
+    videoDirectories = [['./downloaded_celebvhqPt1','videoDataPt1.csv'],
+                        ['./downloaded_celebvhqPt2','videoDataPt2.csv'],
+                        ['./downloaded_celebvhqPt3','videoDataPt3.csv'],
+                        ['./downloaded_celebvhqPt4','videoDataPt4.csv']]
+    
+    
+    for videoDirec in videoDirectories:
+        
+        arquivos = [ f.path for f in os.scandir(videoDirec[0]) if not f.is_dir() ]
+        
+        for arquivo in arquivos:
+                    
+            if "Configuracoes.txt" in arquivo:
+            
+                file1 = open(arquivo, 'r')
+                Lines = file1.readlines()                        
+                
+                arquivoConfiguracao = ""
+                executando = False
+                
+                for line in Lines:
+                                        
+                    if "EmExecucao" in line:
+                        
+                        emExecucao = line.split(":")
+                    
+                        if emExecucao[1].strip() == "False":
+                            
+                            line = "EmExecucao:True\n"
+                            executando = True
+                            
+                            
+                    arquivoConfiguracao += line
+    
+                f = open(arquivo, "w")
+                f.write(arquivoConfiguracao)
+                f.close()
+                
+                
+                if executando:
+                    
+                    videosData = pd.read_csv(videoDirec[1],index_col=0)
+                    
+                    os.makedirs(videoDirec[0], exist_ok=True)
+                    os.makedirs(videoDirec[0]+processed, exist_ok=True)
+                
+                
+                    ultimoVideoFile = videoDirec[0]+"/ultimoVideo.txt"
+                    
+                    
+                    
+                    
+                    if os.path.isfile(ultimoVideoFile):
+                        
+                        ultimoVideoId = ""
+                        file1 = open(ultimoVideoFile, 'r')
+                        Lines = file1.readlines()                
+                        
+                        for line in Lines:
+                            ultimoVideoId = line.strip()
+                        
+                        
+                        if ultimoVideoId != "":
+                        
+                            indice_valor = videosData['VideoId'].eq(ultimoVideoId).idxmax()
+                            videosData = videosData.loc[indice_valor:]
+                        
+                    
+                    for row in videosData.itertuples(index=True, name='Pandas'):
+                        
+                        try:             
+                            vid_id = row[1]        
+                            save_vid_name = row[2]
+                            timeVideo = row[3]
+                            
+                            timeVideo = timeVideo.strip('()').split(',')
+                            timeVideo = tuple(float(valor) for valor in timeVideo)
+                            
+                                                 
+                            bbox = row[4]        
+                            bbox = eval(bbox)
+                            
+                              
+                            raw_vid_path = os.path.join(videoDirec[0]+raw, vid_id + ".mp4.webm")
+                            
+                            f = open(ultimoVideoFile, "w")
+                            f.write(vid_id)
+                            f.close()
+                              
+                            download(raw_vid_path, vid_id, None)
+                            
+                            process_ffmpeg(raw_vid_path, videoDirec[0]+processed, save_vid_name, bbox, timeVideo)
+                            
+                            os.remove(raw_vid_path)
+                            
+                        except:
+                            print("Erro")
+                    
+
 if __name__ == '__main__':
     
-    videosData = pd.read_csv("videoData.csv",index_col=0)    
-    json_path = 'celebvhq_info.json'  # json file path
-    raw_vid_root = './downloaded_celebvhq/raw/'  # download raw video path
-    processed_vid_root = './downloaded_celebvhq/processed/'  # processed video path
-    proxy = None  # proxy url example, set to None if not use
+           
+    t1 = Thread(target = processarVideos)    
+    t2 = Thread(target = processarVideos)
+    t3 = Thread(target = processarVideos)
+    t4 = Thread(target = processarVideos)
     
-    os.makedirs(raw_vid_root, exist_ok=True)
-    os.makedirs(processed_vid_root, exist_ok=True)
-
-
-    ultimoVideoFile = "ultimoVideo.txt"
-        
-    if os.path.isfile(ultimoVideoFile):
-        
-        ultimoVideoId = ""
-        file1 = open(ultimoVideoFile, 'r')
-        Lines = file1.readlines()                
-        
-        for line in Lines:
-            ultimoVideoId = line.strip()
-        
-        
-        if ultimoVideoId != "":
-        
-            indice_valor = videosData['VideoId'].eq(ultimoVideoId).idxmax()
-            videosData = videosData.loc[indice_valor:]
-        
-
-    for row in videosData.itertuples(index=True, name='Pandas'):
-        
-        try:             
-            vid_id = row[1]        
-            save_vid_name = row[2]
-            timeVideo = row[3]
-            
-            timeVideo = timeVideo.strip('()').split(',')
-            timeVideo = tuple(float(valor) for valor in timeVideo)
-            
-            bbox = row[4]        
-            bbox = eval(bbox)
-                            
-            raw_vid_path = os.path.join(raw_vid_root, vid_id + ".mp4.webm")
-            
-            f = open(ultimoVideoFile, "w")
-            f.write(vid_id)
-            f.close()
-            
-            
-            download(raw_vid_path, vid_id, proxy)
-            
-            process_ffmpeg(raw_vid_path, processed_vid_root, save_vid_name, bbox, timeVideo)
-            
-            os.remove(raw_vid_path)
-        except:
-            print("Erro")
-        
-        '''
-        with open('./ytb_id_errored.log', 'r') as f:
-            lines = f.readlines()
-        for line in lines:
-            raw_vid_path = os.path.join(raw_vid_root, line + ".mp4")
-            download(raw_vid_path, line)
-        '''
-        
-    
+    t1.start()
+    time.sleep(20)
+    t2.start()
+    time.sleep(20)
+    t3.start()
+    time.sleep(20)
+    t4.start()        
